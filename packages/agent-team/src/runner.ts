@@ -10,6 +10,7 @@ import type {
   TeamDefinition,
   TeamPlan,
   TeamSession,
+  TeamWorkItem,
   TeamRunEvent,
   TeamRunRequest,
   TeamRunResult,
@@ -19,7 +20,7 @@ export class TeamRunner {
   async run(request: TeamRunRequest): Promise<TeamRunResult> {
     const startedAt = Date.now();
     const policies = {
-      allowParallelAssignments: true,
+      allowParallelAssignments: false,
       allowDynamicRoleInstances: true,
       allowBuiltinContractor: true,
       maxRoleInstances: 6,
@@ -44,7 +45,7 @@ export class TeamRunner {
       status: "running" as const,
     };
 
-    emit(request.onEvent, { type: "session_started", session });
+    emit(request.onEvent, { type: "session_started", session, timestamp: now() });
 
     const planningPrompt = buildTeamLeadPlanningPrompt({
       task: request.task,
@@ -63,7 +64,7 @@ export class TeamRunner {
       onAgentEvent: (event) => emit(request.onEvent, { type: "agent_event", event }),
     });
 
-    emit(request.onEvent, { type: "lead_output", content: leadPlanText });
+    emit(request.onEvent, { type: "lead_output", content: leadPlanText, timestamp: now() });
 
     const plan = normalizePlan(
       extractPlan(leadPlanText) ?? fallbackPlan(request.task, resolvedTeammates),
@@ -72,39 +73,103 @@ export class TeamRunner {
       policies,
     );
 
-    emit(request.onEvent, { type: "plan_created", assignments: plan.assignments });
+    emit(request.onEvent, { type: "plan_created", assignments: plan.assignments, timestamp: now() });
 
-    const runnableAssignments = plan.assignments.map((assignment, index) =>
-      createRoleInstance({
+    const roleSessions = new Map<string, { instance: RoleInstance; role: ResolvedRole }>();
+    const getRoleSession = (assignment: TeamAssignment) => {
+      const key = roleSessionKey(assignment);
+      const existing = roleSessions.get(key);
+      if (existing) {
+        return existing;
+      }
+
+      const entry = createRoleSession({
         assignment,
-        index,
         resolvedTeammates,
         request,
-        policies,
-      }),
-    );
+      });
+      roleSessions.set(key, entry);
+      session.roleInstances[entry.instance.id] = entry.instance;
+      return entry;
+    };
 
-    for (const { instance } of runnableAssignments) {
-      session.roleInstances[instance.id] = instance;
+    const workItems = plan.assignments.map((assignment, index) => {
+      const entry = getRoleSession(assignment);
+      const createdAt = now();
+      const workItem: TeamWorkItem = {
+        id: `work_${index + 1}`,
+        roleId: entry.role.id,
+        roleInstanceId: entry.instance.id,
+        title: assignment.task,
+        assignment,
+        status: "pending",
+        sequence: index + 1,
+        createdAt,
+      };
       session.taskBoard.push({
-        id: `task_${instance.id}`,
-        title: instance.assignedTask,
-        roleInstanceId: instance.id,
+        id: workItem.id,
+        title: workItem.title,
+        roleInstanceId: entry.instance.id,
         status: "pending",
       });
-    }
+      return { workItem, entry };
+    });
 
-    const runOne = async (entry: { instance: RoleInstance; role: ResolvedRole }) => {
+    const completedOutputs: Array<{ instance: RoleInstance; output: string }> = [];
+
+    const runOne = async (item: { workItem: TeamWorkItem; entry: { instance: RoleInstance; role: ResolvedRole } }) => {
+      const { workItem, entry } = item;
       const { instance, role } = entry;
+      instance.assignedTask = workItem.title;
+      instance.context = workItem.assignment.context ?? {};
+      emit(request.onEvent, {
+        type: "work_item_posted",
+        from: "team_lead",
+        to: "mailbox",
+        workItem: { ...workItem },
+        content: workItem.assignment.reason ? `${workItem.title}\n\n分配原因：${workItem.assignment.reason}` : workItem.title,
+        timestamp: now(),
+      });
+
+      workItem.status = "claimed";
+      workItem.claimedAt = now();
+      emit(request.onEvent, {
+        type: "work_item_claimed",
+        from: "mailbox",
+        to: instance.id,
+        workItem: { ...workItem },
+        instance: { ...instance },
+        content: workItem.title,
+        timestamp: workItem.claimedAt,
+      });
+      emit(request.onEvent, {
+        type: "assignment_sent",
+        from: "team_lead",
+        to: instance.id,
+        instance: { ...instance },
+        assignment: workItem.assignment,
+        content: workItem.assignment.reason ? `${workItem.title}\n\n分配原因：${workItem.assignment.reason}` : workItem.title,
+        timestamp: workItem.claimedAt,
+      });
+
+      workItem.status = "running";
       instance.status = "running";
-      updateTaskStatus(session, instance.id, "running");
-      emit(request.onEvent, { type: "role_instance_started", instance: { ...instance } });
+      updateTaskStatus(session, workItem.id, "running");
+      emit(request.onEvent, { type: "role_instance_started", instance: { ...instance }, timestamp: now() });
 
       const runtime = requireRuntime(request.runtimeRegistry, instance.runtimeId);
       const prompt = buildRolePrompt({
         role,
-        task: instance.assignedTask,
-        context: { ...(request.context ?? {}), ...(instance.context ?? {}) },
+        task: workItem.title,
+        context: {
+          ...(request.context ?? {}),
+          ...(workItem.assignment.context ?? {}),
+          teamArtifacts: completedOutputs.map((item) => ({
+            from: item.instance.id,
+            roleId: item.instance.roleId,
+            output: item.output,
+          })),
+        },
       });
 
       const output = await collectRuntimeOutput({
@@ -112,20 +177,49 @@ export class TeamRunner {
         role,
         sessionId: `${session.id}_${instance.id}`,
         task: prompt,
-        context: { ...(request.context ?? {}), ...(instance.context ?? {}) },
+        context: {
+          ...(request.context ?? {}),
+          ...(workItem.assignment.context ?? {}),
+          teamArtifacts: completedOutputs.map((item) => ({
+            from: item.instance.id,
+            roleId: item.instance.roleId,
+            output: item.output,
+          })),
+        },
         timeoutMs: policyTimeoutMs(policies, startedAt),
         onAgentEvent: (event) => emit(request.onEvent, { type: "agent_event", instanceId: instance.id, event }),
       });
 
+      workItem.status = "completed";
+      workItem.completedAt = now();
       instance.status = "completed";
-      updateTaskStatus(session, instance.id, "completed");
-      emit(request.onEvent, { type: "role_instance_completed", instance: { ...instance }, output });
-      return { instance: { ...instance }, output };
+      updateTaskStatus(session, workItem.id, "completed");
+      emit(request.onEvent, { type: "role_instance_completed", instance: { ...instance }, output, timestamp: workItem.completedAt });
+      emit(request.onEvent, {
+        type: "work_item_completed",
+        from: instance.id,
+        to: "mailbox",
+        workItem: { ...workItem },
+        instance: { ...instance },
+        content: output,
+        timestamp: workItem.completedAt,
+      });
+      emit(request.onEvent, {
+        type: "teammate_response",
+        from: instance.id,
+        to: "team_lead",
+        instance: { ...instance },
+        content: output,
+        timestamp: now(),
+      });
+      const result = { instance: { ...instance }, output };
+      completedOutputs.push(result);
+      return result;
     };
 
     const outputs = policies.allowParallelAssignments
-      ? await Promise.all(runnableAssignments.map(runOne))
-      : await runSequentially(runnableAssignments, runOne);
+      ? await Promise.all(workItems.map(runOne))
+      : await runSequentially(workItems, runOne);
 
     const synthesisPrompt = buildTeamLeadSynthesisPrompt({
       task: request.task,
@@ -148,7 +242,7 @@ export class TeamRunner {
     });
 
     session.status = "completed";
-    emit(request.onEvent, { type: "final_output", output: finalOutput });
+    emit(request.onEvent, { type: "final_output", output: finalOutput, timestamp: now() });
     return { session, plan, outputs, finalOutput };
   }
 }
@@ -295,12 +389,17 @@ function fallbackPlan(task: string, teammates: ResolvedRole[]): TeamPlan {
   };
 }
 
-function createRoleInstance(input: {
+function roleSessionKey(assignment: TeamAssignment): string {
+  if (assignment.roleId === "__contractor__") {
+    return `__contractor__:${assignment.contractorSpecialty || "general"}`;
+  }
+  return assignment.roleId;
+}
+
+function createRoleSession(input: {
   assignment: TeamAssignment;
-  index: number;
   resolvedTeammates: ResolvedRole[];
   request: TeamRunRequest;
-  policies: Record<string, unknown>;
 }): { instance: RoleInstance; role: ResolvedRole } {
   const teammate = input.resolvedTeammates.find((role) => role.id === input.assignment.roleId);
   const isContractor = input.assignment.roleId === "__contractor__";
@@ -314,16 +413,14 @@ function createRoleInstance(input: {
     throw new Error(`Role ${role.id} is not allowed to create instances`);
   }
 
-  const instanceId = isContractor
-    ? `contractor_${slug(input.assignment.contractorSpecialty || "general")}_${input.index + 1}`
-    : `${role.id}_${input.index + 1}`;
+  const instanceId = isContractor ? `contractor_${slug(input.assignment.contractorSpecialty || "general")}` : role.id;
 
   return {
     role,
     instance: {
       id: instanceId,
       roleId: role.id,
-      displayName: input.assignment.instanceName || role.displayName,
+      displayName: role.displayName,
       runtimeId: role.runtimeId,
       assignedTask: input.assignment.task,
       context: input.assignment.context ?? {},
@@ -373,11 +470,11 @@ function requireRuntime(registry: Record<string, AgentRuntime>, runtimeId: strin
 }
 
 function updateTaskStatus(
-  session: { taskBoard: Array<{ roleInstanceId?: string; status: "pending" | "running" | "completed" | "failed" }> },
-  instanceId: string,
+  session: { taskBoard: Array<{ id: string; roleInstanceId?: string; status: "pending" | "running" | "completed" | "failed" }> },
+  taskId: string,
   status: "pending" | "running" | "completed" | "failed",
 ) {
-  const task = session.taskBoard.find((item) => item.roleInstanceId === instanceId);
+  const task = session.taskBoard.find((item) => item.id === taskId);
   if (task) {
     task.status = status;
   }
@@ -393,6 +490,10 @@ async function runSequentially<T, R>(items: T[], fn: (item: T) => Promise<R>): P
 
 function emit(callback: ((event: TeamRunEvent) => void) | undefined, event: TeamRunEvent) {
   callback?.(event);
+}
+
+function now(): string {
+  return new Date().toISOString();
 }
 
 function policyTimeoutMs(policies: Record<string, unknown>, startedAt: number): number | undefined {

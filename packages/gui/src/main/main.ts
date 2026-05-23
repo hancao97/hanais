@@ -4,19 +4,25 @@ import { dirname, join } from "node:path";
 import { TeamRunner, type TeamRunEvent } from "@hanais/agent-team";
 import { ClaudeAgentSdkRuntime, CodexCliRuntime } from "@hanais/agent-runtimes";
 import { novelRoles, novelSkills, novelTeam } from "@hanais/teammates";
-import { loadLocalEnv } from "./env.js";
+import { loadLocalEnv, readLocalEnv } from "./env.js";
+import { getSettingsPath, readSettings, writeSettings, type RuntimePreference, type UserSettings } from "./settings.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const appRoot = join(__dirname, "../../..");
+const appRoot = join(__dirname, "../../../..");
 
 loadLocalEnv(appRoot);
 
 interface RunPayload {
   task: string;
-  runtimeId: "codex-cli" | "claude-agent-sdk" | "claude-agent-sdk-kimi";
+  runtimeId: RuntimePreference;
   cwd?: string;
 }
+
+const defaultSettings: UserSettings = {
+  runtimeId: "codex-cli",
+  workspaceDir: appRoot,
+};
 
 async function createWindow() {
   const window = new BrowserWindow({
@@ -58,8 +64,24 @@ ipcMain.handle("team:metadata", () => ({
   team: novelTeam,
   roles: novelRoles,
   skills: novelSkills,
-  cwd: appRoot,
-  kimiConfigured: Boolean(process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
+  cwd: readSettings(defaultSettings).workspaceDir,
+  settings: readSettings(defaultSettings),
+  settingsPath: getSettingsPath(),
+  kimiConfigured: hasKimiConfig(readSettings(defaultSettings).workspaceDir),
+}));
+
+ipcMain.handle("settings:read", () => ({
+  settings: readSettings(defaultSettings),
+  settingsPath: getSettingsPath(),
+}));
+
+ipcMain.handle("settings:write", (_event, settings: UserSettings) => ({
+  settings: writeSettings(settings),
+  settingsPath: getSettingsPath(),
+}));
+
+ipcMain.handle("workspace:env-status", (_event, cwd?: string) => ({
+  kimiConfigured: hasKimiConfig(cwd?.trim() || appRoot),
 }));
 
 ipcMain.handle("workspace:select", async () => {
@@ -113,6 +135,7 @@ ipcMain.handle("team:run", async (event, payload: RunPayload) => {
 
 function createRuntime(runtimeId: RunPayload["runtimeId"], cwd: string) {
   if (runtimeId === "claude-agent-sdk-kimi") {
+    loadLocalEnv(cwd);
     const authToken = process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN;
     if (!authToken) {
       throw new Error("未配置 KIMI_API_KEY。请在项目根目录 .env.local 中配置，文件不会提交到 Git。");
@@ -133,6 +156,18 @@ function createRuntime(runtimeId: RunPayload["runtimeId"], cwd: string) {
   }
 
   return new CodexCliRuntime({ id: runtimeId, cwd, timeoutMs: 10 * 60 * 1000 });
+}
+
+function hasKimiConfig(cwd: string): boolean {
+  const localEnv = readLocalEnv(cwd);
+  return Boolean(
+    localEnv.KIMI_API_KEY ||
+      localEnv.MOONSHOT_API_KEY ||
+      localEnv.ANTHROPIC_AUTH_TOKEN ||
+      process.env.KIMI_API_KEY ||
+      process.env.MOONSHOT_API_KEY ||
+      process.env.ANTHROPIC_AUTH_TOKEN,
+  );
 }
 
 app.whenReady().then(createWindow);

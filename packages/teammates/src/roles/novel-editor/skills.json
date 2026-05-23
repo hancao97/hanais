@@ -1,0 +1,14 @@
+{
+  "consumes": [
+    {
+      "id": "plot-review",
+      "version": ">=1.0.0",
+      "usage": "审查剧情连贯性、人物动机、冲突推进和伏笔。"
+    },
+    {
+      "id": "prose-polishing",
+      "version": ">=1.0.0",
+      "usage": "提出句子、段落和表达层面的润色建议。"
+    }
+  ]
+}

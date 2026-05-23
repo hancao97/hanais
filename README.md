@@ -61,15 +61,14 @@ GUI 里选择 `Claude SDK + Kimi` 即可走这个 runtime。
 packages/teammates/src/
   roles/
     novelist/
-      ROLE.md
-      index.ts
+      identity.md
+      skills.json
   skills/
     story-drafting/
       SKILL.md
-      index.ts
 ```
 
-`ROLE.md` / `SKILL.md` 是人类可读规范，`index.ts` 导出运行时消费的定义对象。
+`identity.md` / `SKILL.md` 是人类可读规范，`skills.json` 描述角色消费哪些技能。运行时代码通过 loader 编译这些声明式资产，不在角色或技能目录里放 `index.ts`。
 
 如果 Electron binary 下载卡住，可以先用下面命令完成源码依赖安装和构建：
 

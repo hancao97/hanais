@@ -2,6 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export function loadLocalEnv(cwd: string) {
+  const values = readLocalEnv(cwd);
+  for (const [key, value] of Object.entries(values)) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+  return values;
+}
+
+export function readLocalEnv(cwd: string): Record<string, string> {
+  const values: Record<string, string> = {};
   for (const filename of [".env.local", ".env"]) {
     const filePath = join(cwd, filename);
     if (!existsSync(filePath)) {
@@ -20,12 +31,14 @@ export function loadLocalEnv(cwd: string) {
       }
       const key = trimmed.slice(0, separator).trim();
       const rawValue = trimmed.slice(separator + 1).trim();
-      if (!key || process.env[key] !== undefined) {
+      if (!key || values[key] !== undefined) {
         continue;
       }
-      process.env[key] = unquote(rawValue);
+      values[key] = unquote(rawValue);
     }
   }
+
+  return values;
 }
 
 function unquote(value: string): string {

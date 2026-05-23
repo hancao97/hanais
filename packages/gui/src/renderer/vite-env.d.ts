@@ -3,11 +3,16 @@
 interface HanaisApi {
   metadata: () => Promise<{
     team: unknown;
-    roles: Array<{ id: string; identity: { title: string; summary: string } }>;
+    roles: Array<{ id: string; identity: { title: string; summary: string }; skills?: Array<{ id: string; version?: string }> }>;
     skills: Array<{ id: string; name: string; description: string }>;
     cwd: string;
+    settings: UserSettings;
+    settingsPath: string;
     kimiConfigured: boolean;
   }>;
+  readSettings: () => Promise<{ settings: UserSettings; settingsPath: string }>;
+  writeSettings: (settings: UserSettings) => Promise<{ settings: UserSettings; settingsPath: string }>;
+  envStatus: (cwd?: string) => Promise<{ kimiConfigured: boolean }>;
   selectWorkspace: () => Promise<string | undefined>;
   runTeam: (payload: {
     task: string;
@@ -26,4 +31,11 @@ interface HanaisApi {
 
 interface Window {
   hanais: HanaisApi;
+}
+
+type RuntimePreference = "codex-cli" | "claude-agent-sdk" | "claude-agent-sdk-kimi";
+
+interface UserSettings {
+  runtimeId: RuntimePreference;
+  workspaceDir: string;
 }

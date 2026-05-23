@@ -1,0 +1,14 @@
+{
+  "consumes": [
+    {
+      "id": "story-drafting",
+      "version": ">=1.0.0",
+      "usage": "创作小说初稿、场景和人物行动。"
+    },
+    {
+      "id": "style-control",
+      "version": ">=1.0.0",
+      "usage": "根据用户指定的题材和风格控制叙事语气。"
+    }
+  ]
+}

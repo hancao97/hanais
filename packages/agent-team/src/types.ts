@@ -113,6 +113,19 @@ export interface TeamTask {
   status: "pending" | "running" | "completed" | "failed";
 }
 
+export interface TeamWorkItem {
+  id: string;
+  roleId: string;
+  roleInstanceId: string;
+  title: string;
+  assignment: TeamAssignment;
+  status: "pending" | "claimed" | "running" | "completed" | "blocked" | "failed";
+  sequence: number;
+  createdAt: string;
+  claimedAt?: string;
+  completedAt?: string;
+}
+
 export interface TeamMessage {
   id: string;
   from: string;
@@ -183,14 +196,19 @@ export interface TeamRunRequest {
 }
 
 export type TeamRunEvent =
-  | { type: "session_started"; session: TeamSession }
-  | { type: "lead_output"; content: string }
-  | { type: "plan_created"; assignments: TeamAssignment[] }
-  | { type: "role_instance_started"; instance: RoleInstance }
-  | { type: "role_instance_completed"; instance: RoleInstance; output: string }
+  | { type: "session_started"; session: TeamSession; timestamp?: string }
+  | { type: "lead_output"; content: string; timestamp?: string }
+  | { type: "plan_created"; assignments: TeamAssignment[]; timestamp?: string }
+  | { type: "work_item_posted"; from: "team_lead"; to: "mailbox"; workItem: TeamWorkItem; content: string; timestamp?: string }
+  | { type: "work_item_claimed"; from: "mailbox"; to: string; workItem: TeamWorkItem; instance: RoleInstance; content: string; timestamp?: string }
+  | { type: "work_item_completed"; from: string; to: "mailbox"; workItem: TeamWorkItem; instance: RoleInstance; content: string; timestamp?: string }
+  | { type: "assignment_sent"; from: "team_lead"; to: string; instance: RoleInstance; assignment: TeamAssignment; content: string; timestamp?: string }
+  | { type: "role_instance_started"; instance: RoleInstance; timestamp?: string }
+  | { type: "role_instance_completed"; instance: RoleInstance; output: string; timestamp?: string }
+  | { type: "teammate_response"; from: string; to: "team_lead"; instance: RoleInstance; content: string; timestamp?: string }
   | { type: "agent_event"; instanceId?: string; event: AgentEvent }
-  | { type: "final_output"; output: string }
-  | { type: "error"; error: string };
+  | { type: "final_output"; output: string; timestamp?: string }
+  | { type: "error"; error: string; timestamp?: string };
 
 export interface TeamAssignment {
   roleId: string;

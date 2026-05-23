@@ -58,9 +58,39 @@ textarea {
   background: #9aa7b5;
 }
 
+.ghostButton {
+  height: 32px;
+  border: 1px solid #c8d0da;
+  border-radius: 6px;
+  color: #39434d;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.ghostButton:hover {
+  background: #f6f8fb;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #c8d0da;
+  border-radius: 6px;
+  color: #39434d;
+  background: #ffffff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.iconButton:hover {
+  background: #f6f8fb;
+}
+
 .workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -174,6 +204,19 @@ textarea {
   line-height: 1.45;
 }
 
+.roleSkills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roleSkills code {
+  border: 1px solid #d8dee6;
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: #f6f8fb;
+}
+
 code {
   overflow-wrap: anywhere;
   color: #47515c;
@@ -240,10 +283,745 @@ pre {
   line-height: 1.45;
 }
 
+.settingsPath {
+  margin: 0 16px 12px;
+  color: #7a8794;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .timeline {
   display: grid;
   max-height: 360px;
   overflow: auto;
+}
+
+.graphPanel {
+  display: grid;
+  grid-template-columns: minmax(760px, 1fr) minmax(300px, 360px);
+  gap: 16px;
+  padding: 16px;
+}
+
+.graphToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.graphToolbar span {
+  min-width: 46px;
+  color: #53606c;
+  text-align: center;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.graphCanvas {
+  position: relative;
+  min-height: 520px;
+  overflow: hidden;
+  border: 1px solid #e1e6ee;
+  border-radius: 8px;
+  background:
+    linear-gradient(#f6f8fb 1px, transparent 1px),
+    linear-gradient(90deg, #f6f8fb 1px, transparent 1px),
+    #ffffff;
+  background-size: 24px 24px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.graphCanvas:active {
+  cursor: grabbing;
+}
+
+.graphWorld {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.graphSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.graphEdgePath {
+  fill: none;
+  stroke: #718197;
+  stroke-width: 1.9;
+}
+
+.graphEdge.replied .graphEdgePath {
+  stroke: #3f8a54;
+  stroke-width: 2.2;
+}
+
+.graphEdge.active .graphEdgePath {
+  stroke: #4e79c7;
+}
+
+.graphEdge.final .graphEdgePath {
+  stroke: #9a7414;
+}
+
+.graphEdge {
+  cursor: pointer;
+}
+
+.graphEdgeHit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16;
+}
+
+.graphEdge.selected .graphEdgePath {
+  stroke: #1f6feb;
+  stroke-width: 2.8;
+}
+
+.graphSvg marker path {
+  fill: #718197;
+}
+
+.graphNode {
+  position: absolute;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  width: 188px;
+  min-height: 76px;
+  border: 1px solid #c8d0da;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #1f2429;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(32, 42, 53, 0.08);
+  cursor: grab;
+  text-align: left;
+  user-select: none;
+  z-index: 2;
+}
+
+.edgeLabelButton {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  max-width: 150px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #d8dee6;
+  border-radius: 999px;
+  padding: 0 8px;
+  color: #47515c;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 3px rgba(32, 42, 53, 0.08);
+  cursor: pointer;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
+.edgeLabelButton.replied {
+  border-color: #9dc7a8;
+  background: rgba(247, 255, 248, 0.96);
+}
+
+.edgeLabelButton.active {
+  border-color: #9bb8ec;
+  background: rgba(244, 248, 255, 0.96);
+}
+
+.edgeLabelButton.final {
+  border-color: #dfc36e;
+  background: rgba(255, 250, 240, 0.96);
+}
+
+.edgeLabelButton:hover,
+.edgeLabelButton.selected {
+  border-color: #1f6feb;
+  color: #174ea6;
+  background: #f4f8ff;
+}
+
+.edgeLabelButton strong,
+.edgeLabelButton small,
+.edgeLabelButton em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.edgeLabelButton em {
+  border-radius: 999px;
+  padding: 2px 6px;
+  color: #2f6b3f;
+  background: #e4f4e8;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.graphNode:active {
+  cursor: grabbing;
+}
+
+.graphNode strong {
+  font-size: 13px;
+}
+
+.nodeText {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.nodeText span {
+  color: #6a7683;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.nodeAvatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #c8d0da;
+  border-radius: 50%;
+  color: transparent;
+  background: #ffffff;
+  font-weight: 750;
+  font-size: 0;
+}
+
+.graphNode:not(.mailbox) .nodeAvatar::before {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  background: inherit;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.graphNode:not(.mailbox) .nodeAvatar::after {
+  position: absolute;
+  bottom: 7px;
+  left: 7px;
+  width: 18px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px 999px 6px 6px;
+  content: "";
+}
+
+.graphNode.lead {
+  border-color: #7aa2e8;
+  background: #f4f8ff;
+}
+
+.graphNode.lead .nodeAvatar {
+  border-color: #7aa2e8;
+  color: #3468bf;
+  background: #e8f0ff;
+}
+
+.graphNode.teammate {
+  border-color: #9dc7a8;
+  background: #f7fff8;
+}
+
+.graphNode.teammate .nodeAvatar {
+  border-color: #9dc7a8;
+  color: #3f8a54;
+  background: #eaf8ed;
+}
+
+.graphNode.user {
+  border-color: #d8c27f;
+  background: #fffaf0;
+}
+
+.graphNode.user .nodeAvatar {
+  border-color: #d8c27f;
+  color: #9a7414;
+  background: #fff1c7;
+}
+
+.graphNode.mailbox {
+  grid-template-columns: 54px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 2px solid #a986e8;
+  border-radius: 12px;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(242, 236, 255, 0.92), rgba(255, 255, 255, 0.98)),
+    repeating-linear-gradient(0deg, rgba(169, 134, 232, 0.12) 0 1px, transparent 1px 12px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 0 0 5px rgba(169, 134, 232, 0.13),
+    0 8px 18px rgba(82, 61, 128, 0.12);
+}
+
+.graphNode.mailbox .nodeAvatar {
+  width: 42px;
+  height: 42px;
+  border-color: #b5a0e6;
+  border-radius: 12px;
+  color: #7a5bc8;
+  background: #f1ebff;
+}
+
+.graphNode.mailbox .nodeAvatar::before {
+  position: absolute;
+  top: 11px;
+  left: 9px;
+  width: 22px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  content: "";
+}
+
+.graphNode.mailbox .nodeAvatar::after {
+  top: 16px;
+  bottom: auto;
+  left: 12px;
+  width: 17px;
+  height: 8px;
+  border: 0;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  border-radius: 2px 2px 0 0;
+  background: transparent;
+  content: "";
+  transform: rotate(135deg);
+}
+
+.graphNode.mailbox .nodeText {
+  align-self: center;
+}
+
+.graphNode.mailbox .nodeText strong {
+  font-size: 16px;
+}
+
+.mailboxNodeStats {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding-top: 10px;
+}
+
+.mailboxNodeStats span {
+  display: grid;
+  place-items: center;
+  min-height: 24px;
+  border: 1px solid rgba(169, 134, 232, 0.34);
+  border-radius: 999px;
+  color: #5f4aa0;
+  background: rgba(255, 255, 255, 0.74);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.graphNode.running {
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+}
+
+.graphNode.attention {
+  box-shadow: 0 0 0 3px rgba(223, 164, 61, 0.18);
+}
+
+.graphNode.completed {
+  border-style: solid;
+}
+
+.graphNode.selected {
+  outline: 3px solid rgba(31, 111, 235, 0.28);
+}
+
+.nodeInspector {
+  display: grid;
+  align-content: start;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid #e1e6ee;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.inspectorHeader {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e6eaf0;
+  background: #fbfcfe;
+}
+
+.inspectorHeader h3 {
+  margin: 0 0 3px;
+  font-size: 14px;
+}
+
+.inspectorHeader span,
+.inspectorHeader strong {
+  color: #6a7683;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.conversationItem {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.conversationItem:last-child {
+  border-bottom: 0;
+}
+
+.conversationItem header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.conversationItem small {
+  color: #6a7683;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.conversationItem p {
+  margin: 0;
+  color: #303941;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.conversationItem.message,
+.conversationItem.final,
+.conversationItem.response {
+  background: #ffffff;
+}
+
+.conversationItem.tool_call {
+  background: #fffaf0;
+}
+
+.conversationItem.error {
+  background: #fff4f4;
+}
+
+.conversationItem.user {
+  background: #f4f8ff;
+}
+
+.mailboxPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 16px;
+  padding: 0 16px 16px;
+}
+
+.mailboxBoard,
+.interventionBox {
+  overflow: hidden;
+  border: 1px solid #e1e6ee;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.mailboxBoard {
+  border-color: #bfa8ee;
+  background:
+    linear-gradient(180deg, rgba(250, 247, 255, 0.95), rgba(255, 255, 255, 0.98)),
+    repeating-linear-gradient(90deg, rgba(169, 134, 232, 0.08) 0 1px, transparent 1px 14px);
+}
+
+.mailboxBoard > header,
+.interventionBox > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e6eaf0;
+}
+
+.mailboxBoard > header {
+  border-bottom-color: #ddcff7;
+  background: linear-gradient(90deg, #f4edff, #ffffff);
+}
+
+.mailboxBoard h3,
+.interventionBox h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.mailboxBoard header span,
+.interventionBox header span {
+  color: #6a7683;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.mailboxBoard header strong {
+  color: #47515c;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.mailboxGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(300px, 1.15fr);
+  min-height: 210px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.messageRail {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border-right: 1px solid #ddcff7;
+  background: rgba(250, 247, 255, 0.76);
+}
+
+.messageRail::before {
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 30px;
+  width: 2px;
+  border-radius: 999px;
+  background: #d6c5f5;
+  content: "";
+}
+
+.mailRoute {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  padding: 8px;
+  color: #25313d;
+  background: #fbfcfe;
+  cursor: pointer;
+  text-align: left;
+  z-index: 1;
+}
+
+.mailRoute.selected,
+.mailRoute:hover {
+  border-color: #7aa2e8;
+  background: #f4f8ff;
+}
+
+.mailRoute.pending {
+  border-color: #dfc36e;
+  background: #fffaf0;
+}
+
+.mailRoute.active {
+  border-color: #7aa2e8;
+  background: #f4f8ff;
+}
+
+.mailRoute.done {
+  border-color: #9dc7a8;
+  background: #f7fff8;
+}
+
+.mailOrder {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #c8d0da;
+  border-radius: 999px;
+  color: #47515c;
+  background: #ffffff;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  box-shadow: 0 0 0 4px #ffffff;
+}
+
+.mailRouteText {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.mailRouteText strong,
+.mailRouteText small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mailRouteText small,
+.mailPreview small {
+  color: #6a7683;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.mailBuckets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 12px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.mailBucket {
+  display: grid;
+  align-content: start;
+  overflow: hidden;
+  min-height: 150px;
+  border: 1px solid #d9dfe8;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.mailBucket > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border-bottom: 1px solid #edf0f4;
+  background: #fbfcfe;
+}
+
+.mailBucket.pending > header {
+  border-bottom-color: #ead9a5;
+  background: #fffaf0;
+}
+
+.mailBucket.active > header {
+  border-bottom-color: #c8d8f5;
+  background: #f4f8ff;
+}
+
+.mailBucket.done > header {
+  border-bottom-color: #c9e3d0;
+  background: #f7fff8;
+}
+
+.mailBucket header span {
+  color: #6a7683;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.mailBucketHelper,
+.mailBucketEmpty {
+  margin: 0;
+  padding: 8px 11px;
+  color: #6a7683;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mailBucketHelper {
+  border-bottom: 1px solid #edf0f4;
+  background: #ffffff;
+}
+
+.mailBucketEmpty {
+  color: #9aa7b5;
+}
+
+.mailPreview {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #edf0f4;
+  padding: 10px 11px;
+  color: #303941;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mailPreview:last-child {
+  border-bottom: 0;
+}
+
+.mailPreview:hover {
+  background: #f6f8fb;
+}
+
+.mailPreview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interventionBox {
+  display: grid;
+  align-content: start;
+}
+
+.interventionBox textarea {
+  min-height: 92px;
+  margin: 12px 14px 10px;
+  border: 1px solid #c8d0da;
+  border-radius: 6px;
+  padding: 10px;
+  resize: vertical;
+  background: #ffffff;
+  line-height: 1.45;
+}
+
+.interventionBox button {
+  justify-self: end;
+  margin: 0 14px 14px;
+  height: 34px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 14px;
+  color: #ffffff;
+  background: #1f6feb;
+  cursor: pointer;
+}
+
+.interventionBox button:disabled {
+  cursor: not-allowed;
+  background: #9aa7b5;
 }
 
 .timelineItem {
@@ -284,6 +1062,14 @@ pre {
   }
 
   .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .graphPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .mailboxPanel {
     grid-template-columns: 1fr;
   }
 }

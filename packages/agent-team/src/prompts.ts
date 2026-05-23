@@ -12,9 +12,8 @@ export function buildTeamLeadPlanningPrompt(input: {
       return [
         `- roleId: ${role.id}`,
         `  title: ${role.identity.title}`,
-        `  summary: ${role.identity.summary}`,
-        `  skills: ${skills || "无"}`,
-        `  boundaries: ${role.identity.boundaries.join("；")}`,
+        `  description: ${role.identity.summary}`,
+        `  sessionSkills: ${skills || "无"}`,
       ].join("\n");
     })
     .join("\n");
@@ -28,9 +27,12 @@ export function buildTeamLeadPlanningPrompt(input: {
     "3. 如果确实缺少角色，且任务无法由现有 teammate 完成，可以使用特殊 roleId: __contractor__。",
     "4. __contractor__ 表示系统内置外包角色，不是新 RoleDefinition。必须填写 contractorSpecialty。",
     "5. 优先使用已有 teammate；只有明显缺角色时才使用 __contractor__。",
-    "6. 输出必须是 JSON，不要输出 Markdown。",
+    "6. assignments 是有时序的工作队列，必须按实际依赖顺序排列。例如先写初稿，再审核，再修改，再复审。",
+    "7. 多轮工作必须复用同一个 roleId。不要为了“初稿/修改/一审/终审”创造多个同类人物或多个实例名。",
+    "8. 后续 assignment 会自动收到前序 teammate 输出作为 teamArtifacts，不要要求角色去文件系统寻找前序产物。",
+    "9. 输出必须是 JSON，不要输出 Markdown。",
     "",
-    "可用 teammates：",
+    "可用 teammate 调度卡片：",
     teammateSummary,
     "",
     `team policies: ${JSON.stringify(input.policies)}`,
@@ -104,6 +106,7 @@ export function buildRolePrompt(input: {
     "",
     role.contractorSpecialty ? `外包专项：${role.contractorSpecialty}` : "",
     `上下文：${JSON.stringify(input.context)}`,
+    "如果上下文里包含 teamArtifacts，请优先基于这些前序产出继续工作，不要假设必须从文件系统读取。",
     "",
     `你的任务：${input.task}`,
     "",

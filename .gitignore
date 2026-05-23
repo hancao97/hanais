@@ -4,3 +4,4 @@ packages/*/dist/
 .DS_Store
 .env
 .env.local
+reference-projects/

@@ -1,10 +1,9 @@
 import type { TeamDefinition } from "@hanais/agent-team";
-import { plotReviewSkill, prosePolishingSkill, storyDraftingSkill, styleControlSkill } from "./skills/index.js";
-import { novelEditorRole, novelistRole } from "./roles/index.js";
+import { loadRoles, loadSkills } from "./definition-loader.js";
 
-export const novelSkills = [storyDraftingSkill, styleControlSkill, plotReviewSkill, prosePolishingSkill];
+export const novelSkills = loadSkills(["story-drafting", "style-control", "plot-review", "prose-polishing"]);
 
-export const novelRoles = [novelistRole, novelEditorRole];
+export const novelRoles = loadRoles(["novelist", "novel-editor"]);
 
 export const novelTeam: TeamDefinition = {
   id: "novel_creation_team",
@@ -26,10 +25,10 @@ export const novelTeam: TeamDefinition = {
     allowParallelAssignments: false,
     allowDynamicRoleInstances: true,
     allowBuiltinContractor: true,
-    maxRoleInstances: 4,
+    maxRoleInstances: 6,
     maxBuiltinContractors: 1,
     roleInstanceLimits: {
-      novelist: { maxInstances: 2, requiresApproval: false },
+      novelist: { maxInstances: 1, requiresApproval: false },
       novel_editor: { maxInstances: 1, requiresApproval: false },
     },
   },
