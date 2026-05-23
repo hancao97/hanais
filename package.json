@@ -1,0 +1,18 @@
+{
+  "name": "hanais",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "gui:build": "pnpm --filter @hanais/gui build",
+    "gui:dev": "pnpm --filter @hanais/gui dev",
+    "gui:start": "pnpm --filter @hanais/gui start"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "typescript": "^5.7.3"
+  },
+  "packageManager": "pnpm@8.6.10"
+}

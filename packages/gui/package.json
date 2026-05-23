@@ -1,0 +1,31 @@
+{
+  "name": "@hanais/gui",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "pnpm build:renderer && pnpm build:main",
+    "build:renderer": "vite build",
+    "build:main": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json",
+    "dev": "pnpm build:main && concurrently -k -n renderer,electron -c blue,green \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && HANAIS_GUI_DEV_URL=http://127.0.0.1:5173 electron dist/main/main.js\"",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "start": "electron dist/main/main.js"
+  },
+  "dependencies": {
+    "@hanais/agent-runtimes": "workspace:*",
+    "@hanais/agent-team": "workspace:*",
+    "@hanais/teammates": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "electron": "^34.0.2",
+    "vite": "^6.0.7",
+    "wait-on": "^8.0.2"
+  }
+}
