@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
+    "test:agent-team": "pnpm --filter @hanais/agent-team test",
     "typecheck": "pnpm -r typecheck",
     "gui:build": "pnpm --filter @hanais/gui build",
     "gui:dev": "pnpm --filter @hanais/gui dev",

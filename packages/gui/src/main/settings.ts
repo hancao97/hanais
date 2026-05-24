@@ -11,6 +11,7 @@ export interface UserSettings {
 
 const settingsDir = join(homedir(), ".hanais");
 const settingsPath = join(settingsDir, "settings.json");
+const teamsPath = join(settingsDir, "teams");
 const legacySettingsPath = join(homedir(), "hanais", "settings.json");
 
 export function readSettings(defaults: UserSettings): UserSettings {
@@ -36,6 +37,10 @@ export function writeSettings(settings: UserSettings): UserSettings {
 
 export function getSettingsPath(): string {
   return settingsPath;
+}
+
+export function getTeamsPath(): string {
+  return teamsPath;
 }
 
 function normalizeSettings(input: Partial<UserSettings>, defaults: UserSettings): UserSettings {

@@ -1,0 +1,14 @@
+{
+  "consumes": [
+    {
+      "id": "team-planning",
+      "version": ">=1.0.0",
+      "usage": "把用户任务拆解成受控 Act assignments。"
+    },
+    {
+      "id": "team-synthesis",
+      "version": ">=1.0.0",
+      "usage": "基于 teammate 产物、review 结论和人工介入意见生成最终交付。"
+    }
+  ]
+}

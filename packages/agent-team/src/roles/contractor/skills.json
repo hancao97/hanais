@@ -1,0 +1,9 @@
+{
+  "consumes": [
+    {
+      "id": "contractor-execution",
+      "version": ">=1.0.0",
+      "usage": "以受控专项能力完成局部外包任务。"
+    }
+  ]
+}

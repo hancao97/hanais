@@ -1,15 +1,25 @@
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { TeamRunner, type TeamRunEvent } from "@hanais/agent-team";
+import {
+  FileTeamStateStore,
+  TeamRunner,
+  builtinSystemRoles,
+  builtinSystemServices,
+  builtinSystemSkills,
+  type HumanInputRequest,
+  type TeamRunEvent,
+} from "@hanais/agent-team";
 import { ClaudeAgentSdkRuntime, CodexCliRuntime } from "@hanais/agent-runtimes";
 import { novelRoles, novelSkills, novelTeam } from "@hanais/teammates";
 import { loadLocalEnv, readLocalEnv } from "./env.js";
-import { getSettingsPath, readSettings, writeSettings, type RuntimePreference, type UserSettings } from "./settings.js";
+import { getSettingsPath, getTeamsPath, readSettings, writeSettings, type RuntimePreference, type UserSettings } from "./settings.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const appRoot = join(__dirname, "../../../..");
+const teamStateStore = new FileTeamStateStore({ rootDir: getTeamsPath() });
+const pendingHumanInputs = new Map<string, { request: HumanInputRequest; resolve: (answer: string | undefined) => void }>();
 
 loadLocalEnv(appRoot);
 
@@ -64,9 +74,13 @@ ipcMain.handle("team:metadata", () => ({
   team: novelTeam,
   roles: novelRoles,
   skills: novelSkills,
+  systemRoles: builtinSystemRoles,
+  systemSkills: builtinSystemSkills,
+  systemServices: builtinSystemServices,
   cwd: readSettings(defaultSettings).workspaceDir,
   settings: readSettings(defaultSettings),
   settingsPath: getSettingsPath(),
+  teamsPath: getTeamsPath(),
   kimiConfigured: hasKimiConfig(readSettings(defaultSettings).workspaceDir),
 }));
 
@@ -90,6 +104,25 @@ ipcMain.handle("workspace:select", async () => {
     properties: ["openDirectory", "createDirectory"],
   });
   return result.canceled ? undefined : result.filePaths[0];
+});
+
+ipcMain.handle("team:history", async () => ({
+  runs: await teamStateStore.listSessions(30),
+  teamsPath: getTeamsPath(),
+}));
+
+ipcMain.handle("team:events", async (_event, sessionId: string) => ({
+  events: await teamStateStore.listEvents(sessionId),
+}));
+
+ipcMain.handle("team:answer-human-input", async (_event, payload: { requestId: string; answer: string }) => {
+  const pending = pendingHumanInputs.get(payload.requestId);
+  if (!pending) {
+    return { accepted: false };
+  }
+  pendingHumanInputs.delete(payload.requestId);
+  pending.resolve(payload.answer);
+  return { accepted: true };
 });
 
 ipcMain.handle("team:run", async (event, payload: RunPayload) => {
@@ -120,17 +153,22 @@ ipcMain.handle("team:run", async (event, payload: RunPayload) => {
       [runtimeIdForTeam]: runtime,
     },
     task: payload.task,
+    stateStore: teamStateStore,
     context: {
       workspace: cwd,
       gui: "electron",
     },
+    requestHumanInput: (request) =>
+      new Promise((resolve) => {
+        pendingHumanInputs.set(request.id, { request, resolve });
+      }),
     onEvent: (teamEvent) => {
       events.push(teamEvent);
       event.sender.send("team:event", teamEvent);
     },
   });
 
-  return { result, events };
+  return { result, events, history: await teamStateStore.listSessions(30) };
 });
 
 function createRuntime(runtimeId: RunPayload["runtimeId"], cwd: string) {

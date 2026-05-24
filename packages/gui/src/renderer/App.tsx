@@ -6,8 +6,28 @@ interface Metadata {
   team: unknown;
   roles: Array<{ id: string; identity: { title: string; summary: string }; skills?: Array<{ id: string; version?: string }> }>;
   skills: Array<{ id: string; name: string; description: string }>;
+  systemRoles?: Array<{ id: string; identity: { title: string; summary: string } }>;
+  systemSkills?: Array<{ id: string; name: string; description: string }>;
+  systemServices?: Array<{ id: string; name: string; description: string }>;
   cwd: string;
+  teamsPath: string;
   kimiConfigured: boolean;
+}
+
+interface TeamRunSummary {
+  id: string;
+  teamId: string;
+  task: string;
+  status: "running" | "waiting" | "completed" | "failed" | "cancelled";
+  currentPhase: string;
+  createdAt: string;
+  updatedAt: string;
+  workItemCount: number;
+  completedWorkItemCount: number;
+  actEpisodeCount: number;
+  reviewCount: number;
+  humanInputCount: number;
+  storagePath?: string;
 }
 
 interface RunResult {
@@ -17,6 +37,7 @@ interface RunResult {
     outputs: Array<{ instance: { displayName: string; roleId: string; id: string }; output: string }>;
   };
   events: Array<{ type: string; [key: string]: unknown }>;
+  history?: TeamRunSummary[];
 }
 
 type TeamEvent = { type: string; [key: string]: unknown };
@@ -81,6 +102,15 @@ interface MailboxGroup {
   items: MailboxItem[];
 }
 
+interface HumanInputRequestView {
+  id: string;
+  question: string;
+  reason?: string;
+  status: "pending" | "answered" | "cancelled";
+  answer?: string;
+  createdAt: string;
+}
+
 type DragState = {
   pointerId: number;
   nodeId: string;
@@ -123,6 +153,7 @@ export function App() {
   const [runtimeId, setRuntimeId] = useState<RuntimeId>("codex-cli");
   const [cwd, setCwd] = useState("");
   const [settingsPath, setSettingsPath] = useState("");
+  const [teamsPath, setTeamsPath] = useState("");
   const [task, setTask] = useState(defaultTask);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState("");
@@ -137,6 +168,8 @@ export function App() {
   const [panState, setPanState] = useState<PanState>();
   const [graphViewport, setGraphViewport] = useState<GraphViewport>(defaultViewport);
   const [interventionText, setInterventionText] = useState("");
+  const [pendingHumanInput, setPendingHumanInput] = useState<HumanInputRequestView>();
+  const [runHistory, setRunHistory] = useState<TeamRunSummary[]>([]);
   const graphCanvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -152,8 +185,10 @@ export function App() {
         setCwd(data.settings.workspaceDir || data.cwd);
         setRuntimeId(data.settings.runtimeId);
         setSettingsPath(data.settingsPath);
+        setTeamsPath(data.teamsPath);
         setKimiConfigured(data.kimiConfigured);
         setSettingsLoaded(true);
+        void refreshHistory();
       })
       .catch((metadataError) => {
         setError(metadataError instanceof Error ? metadataError.message : String(metadataError));
@@ -186,6 +221,15 @@ export function App() {
       return;
     }
     return window.hanais.onTeamEvent((event) => {
+      if (event.type === "human_input_requested") {
+        const request = readPath(event, ["request"]) as HumanInputRequestView | undefined;
+        if (request?.id) {
+          setPendingHumanInput(request);
+        }
+      }
+      if (event.type === "human_input_answered") {
+        setPendingHumanInput(undefined);
+      }
       setLiveEvents((current) => [...current, event].slice(-160));
     });
   }, []);
@@ -243,13 +287,32 @@ export function App() {
     setSelectedEdgeId(undefined);
     setNodePositions(emptyPositions());
     setGraphViewport(defaultViewport());
+    setPendingHumanInput(undefined);
     try {
       const response = await window.hanais.runTeam({ task, runtimeId, cwd });
       setResult(response);
+      if (response.history) {
+        setRunHistory(response.history);
+      } else {
+        await refreshHistory();
+      }
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : String(runError));
     } finally {
       setIsRunning(false);
+    }
+  }
+
+  async function refreshHistory() {
+    if (!window.hanais?.listTeamRuns) {
+      return;
+    }
+    try {
+      const response = await window.hanais.listTeamRuns();
+      setRunHistory(response.runs);
+      setTeamsPath(response.teamsPath);
+    } catch {
+      setRunHistory([]);
     }
   }
 
@@ -269,10 +332,18 @@ export function App() {
     setGraphViewport(defaultViewport());
   }
 
-  function sendIntervention() {
+  async function sendIntervention() {
     const content = interventionText.trim();
     if (!content) {
       return;
+    }
+
+    if (pendingHumanInput && window.hanais?.answerHumanInput) {
+      const response = await window.hanais.answerHumanInput({ requestId: pendingHumanInput.id, answer: content });
+      if (!response.accepted) {
+        setError("当前人工介入请求已失效，请等待新的请求。");
+        return;
+      }
     }
 
     setLiveEvents((current) =>
@@ -289,6 +360,7 @@ export function App() {
       ].slice(-180),
     );
     setInterventionText("");
+    setPendingHumanInput(undefined);
   }
 
   function screenPointFromPointer(event: React.PointerEvent | React.WheelEvent) {
@@ -427,10 +499,42 @@ export function App() {
               <div className="hintBox">未检测到 KIMI_API_KEY。请在当前工作目录 `.env.local` 中配置。</div>
             ) : null}
             {settingsPath ? <div className="settingsPath">偏好保存到：{settingsPath}</div> : null}
+            {teamsPath ? <div className="settingsPath">运行历史保存到：{teamsPath}</div> : null}
             <label className="field">
               <span>用户任务</span>
               <textarea value={task} onChange={(event) => setTask(event.target.value)} />
             </label>
+          </div>
+
+          <div className="panel">
+            <div className="panelHeader">
+              <h2>历史运行</h2>
+              <button className="ghostButton" type="button" onClick={refreshHistory}>
+                刷新
+              </button>
+            </div>
+            {runHistory.length ? (
+              <div className="historyList">
+                {runHistory.slice(0, 8).map((run) => (
+                  <div className={`historyRow ${run.status}`} key={run.id}>
+                    <header>
+                      <strong>{run.status}</strong>
+                      <small>{formatTime(run.updatedAt)}</small>
+                    </header>
+                    <p>{run.task}</p>
+                    <footer>
+                      <code>{run.id}</code>
+                      <span>
+                        {run.completedWorkItemCount}/{run.workItemCount} work
+                      </span>
+                      <span>{run.actEpisodeCount} act</span>
+                    </footer>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="emptyText">暂无历史运行。</p>
+            )}
           </div>
 
           <div className="panel">
@@ -450,6 +554,35 @@ export function App() {
                     </div>
                   ) : null}
                   <code>{role.id}</code>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panelHeader">
+              <h2>System</h2>
+            </div>
+            <div className="roleList">
+              {metadata?.systemRoles?.map((role) => (
+                <div className="roleRow system" key={role.id}>
+                  <strong>{role.identity.title}</strong>
+                  <span>{role.identity.summary}</span>
+                  <code>{role.id}</code>
+                </div>
+              ))}
+              {metadata?.systemServices?.map((service) => (
+                <div className="roleRow systemService" key={service.id}>
+                  <strong>{service.name}</strong>
+                  <span>{service.description}</span>
+                  <code>{service.id}</code>
+                </div>
+              ))}
+              {metadata?.systemSkills?.map((skill) => (
+                <div className="roleRow systemSkill" key={skill.id}>
+                  <strong>{skill.name}</strong>
+                  <span>{skill.description}</span>
+                  <code>{skill.id}</code>
                 </div>
               ))}
             </div>
@@ -711,11 +844,17 @@ export function App() {
               <div className="interventionBox">
                 <header>
                   <h3>用户介入</h3>
-                  <span>to {interventionTarget}</span>
+                  <span>{pendingHumanInput ? `request ${pendingHumanInput.id}` : `to ${interventionTarget}`}</span>
                 </header>
+                {pendingHumanInput ? (
+                  <div className="humanInputRequest">
+                    <strong>{pendingHumanInput.reason || "waiting_for_human"}</strong>
+                    <p>{pendingHumanInput.question}</p>
+                  </div>
+                ) : null}
                 <textarea value={interventionText} onChange={(event) => setInterventionText(event.target.value)} />
                 <button type="button" onClick={sendIntervention} disabled={!interventionText.trim()}>
-                  投递消息
+                  {pendingHumanInput ? "提交介入" : "投递消息"}
                 </button>
               </div>
             </div>
@@ -778,6 +917,10 @@ function eventTitle(event: AppEvent): string {
       return `agent event: ${readPath(event, ["event", "roleId"]) || "unknown"}`;
     case "final_output":
       return "team_lead final output";
+    case "human_input_requested":
+      return "review_gate needs human input";
+    case "human_input_answered":
+      return "human input answered";
     case "user_intervention":
       return `user -> ${String(event.to || "team_lead")}`;
     default:
@@ -794,6 +937,10 @@ function eventSummary(event: AppEvent): string {
   }
   if (event.type === "plan_created" && Array.isArray(event.assignments)) {
     return `${event.assignments.length} assignments`;
+  }
+  const question = readPath(event, ["request", "question"]);
+  if (typeof question === "string") {
+    return truncate(question);
   }
   const output = readPath(event, ["output"]);
   if (typeof output === "string") {
@@ -828,6 +975,10 @@ function truncate(value: string): string {
   return value.length > 320 ? `${value.slice(0, 320)}...` : value;
 }
 
+function isGraphSystemService(id: string): boolean {
+  return id === "mailbox" || id === "state_store" || id === "review_gate" || id === "human_input_gateway";
+}
+
 function buildInteractionGraph(events: AppEvent[], roles: Metadata["roles"]) {
   const roleTitle = new Map(roles.map((role) => [role.id, role.identity.title]));
   const nodes = new Map<string, GraphNode>();
@@ -848,7 +999,6 @@ function buildInteractionGraph(events: AppEvent[], roles: Metadata["roles"]) {
   };
 
   nodes.set("user", { id: "user", label: "用户", kind: "user", status: "idle" });
-  nodes.set("mailbox", { id: "mailbox", label: "Team Mailbox", kind: "mailbox", status: "idle" });
   nodes.set("team_lead", { id: "team_lead", label: "Team Lead", kind: "lead", status: events.length ? "running" : "idle" });
   addEdge({
     id: "user-task",
@@ -875,8 +1025,44 @@ function buildInteractionGraph(events: AppEvent[], roles: Metadata["roles"]) {
           status: "idle",
         });
       }
-      const mailbox = nodes.get("mailbox");
-      nodes.set("mailbox", { ...(mailbox ?? { id: "mailbox", label: "Team Mailbox", kind: "mailbox" as const }), status: "attention" });
+    }
+
+    if (event.type === "team_message_posted") {
+      const message = readPath(event, ["message"]) as { id?: string; from?: string; to?: string; type?: string; content?: string } | undefined;
+      const from = String(message?.from || "");
+      const to = String(message?.to || "mailbox");
+      const messageType = String(message?.type || "message");
+      const isMailboxEdge = from === "mailbox" || to === "mailbox";
+      const duplicatesWorkItemEdge = messageType === "task_request";
+      if (from && !isGraphSystemService(from) && !nodes.has(from)) {
+        nodes.set(from, {
+          id: from,
+          label: roleTitle.get(from) || from,
+          kind: from === "team_lead" ? "lead" : from === "user" ? "user" : "teammate",
+          status: "idle",
+        });
+      }
+      if (to && !isGraphSystemService(to) && !nodes.has(to)) {
+        nodes.set(to, {
+          id: to,
+          label: roleTitle.get(to) || to,
+          kind: to === "team_lead" ? "lead" : to === "user" ? "user" : "teammate",
+          status: "attention",
+        });
+      }
+      if (!isMailboxEdge && !duplicatesWorkItemEdge) {
+        addEdge({
+          id: message?.id || `team-message-${index}`,
+          from,
+          to,
+          label: messageType,
+          content: String(message?.content || ""),
+          kind: messageType,
+          order: edgeOrder,
+          status: messageType === "approval" || messageType === "artifact_delivery" ? "replied" : "active",
+          timestamp: eventTimestamp(event),
+        });
+      }
     }
 
     if (event.type === "work_item_claimed") {
@@ -945,6 +1131,20 @@ function buildInteractionGraph(events: AppEvent[], roles: Metadata["roles"]) {
       });
     }
 
+    if (event.type === "review_completed") {
+      const reviewer = String(readPath(event, ["review", "reviewerInstanceId"]) || readPath(event, ["review", "reviewerRoleId"]) || "");
+      const outcome = String(readPath(event, ["review", "result", "outcome"]) || "review_completed");
+      if (reviewer) {
+        const existing = nodes.get(reviewer);
+        nodes.set(reviewer, {
+          id: reviewer,
+          label: existing?.label || roleTitle.get(reviewer) || reviewer,
+          kind: "teammate",
+          status: outcome === "approved" ? "completed" : "attention",
+        });
+      }
+    }
+
     if (event.type === "final_output") {
       const lead = nodes.get("team_lead");
       nodes.set("team_lead", { ...(lead ?? { id: "team_lead", label: "Team Lead", kind: "lead" as const }), status: "completed" });
@@ -970,8 +1170,6 @@ function buildInteractionGraph(events: AppEvent[], roles: Metadata["roles"]) {
       } else if (targetNode) {
         nodes.set(target, { ...targetNode, status: "attention" });
       }
-      const mailbox = nodes.get("mailbox");
-      nodes.set("mailbox", { ...(mailbox ?? { id: "mailbox", label: "Team Mailbox", kind: "mailbox" as const }), status: "attention" });
       const order = edgeOrder++;
       const timestamp = eventTimestamp(event);
       addEdge({
@@ -992,7 +1190,6 @@ function buildInteractionGraph(events: AppEvent[], roles: Metadata["roles"]) {
   const positions: Record<string, { x: number; y: number }> = {
     user: { x: 150, y: 260 },
     team_lead: { x: 475, y: 220 },
-    mailbox: { x: 475, y: 380 },
   };
 
   teammateNodes.forEach((node, index) => {
@@ -1046,6 +1243,22 @@ function buildNodeConversation(nodeId: string, events: AppEvent[]): Conversation
         content: String(event.content || ""),
         timestamp: eventTimestamp(event),
       });
+    }
+
+    if (event.type === "team_message_posted") {
+      const message = readPath(event, ["message"]) as { from?: string; to?: string; type?: string; content?: string } | undefined;
+      const from = String(message?.from || "");
+      const to = String(message?.to || "mailbox");
+      if (nodeId === from || nodeId === to || nodeId === "mailbox") {
+        items.push({
+          kind: String(message?.type || "message"),
+          source: from,
+          target: to,
+          title: String(message?.type || "团队消息"),
+          content: String(message?.content || ""),
+          timestamp: eventTimestamp(event),
+        });
+      }
     }
 
     if (event.type === "work_item_claimed") {
@@ -1155,6 +1368,49 @@ function buildNodeConversation(nodeId: string, events: AppEvent[]): Conversation
       }
     }
 
+    if (event.type === "review_completed") {
+      const reviewer = String(readPath(event, ["review", "reviewerInstanceId"]) || readPath(event, ["review", "reviewerRoleId"]) || "");
+      const targetWorkItemId = String(readPath(event, ["review", "targetWorkItemId"]) || "");
+      if (nodeId === reviewer || nodeId === "mailbox" || nodeId === "team_lead") {
+        items.push({
+          kind: "review",
+          source: reviewer,
+          target: targetWorkItemId,
+          title: `Review: ${String(readPath(event, ["review", "result", "outcome"]) || "")}`,
+          content: JSON.stringify(readPath(event, ["review", "result"]) || {}, null, 2),
+          timestamp: eventTimestamp(event),
+        });
+      }
+    }
+
+    if (event.type === "human_input_requested") {
+      const request = readPath(event, ["request"]) as HumanInputRequestView | undefined;
+      if (request && (nodeId === "user" || nodeId === "team_lead")) {
+        items.push({
+          kind: "human_input",
+          source: "review_gate",
+          target: "user",
+          title: "等待人工介入",
+          content: request.question,
+          timestamp: eventTimestamp(event),
+        });
+      }
+    }
+
+    if (event.type === "human_input_answered") {
+      const request = readPath(event, ["request"]) as HumanInputRequestView | undefined;
+      if (request && (nodeId === "user" || nodeId === "team_lead")) {
+        items.push({
+          kind: "human_input",
+          source: "user",
+          target: "review_gate",
+          title: "人工介入已提交",
+          content: request.answer || "",
+          timestamp: eventTimestamp(event),
+        });
+      }
+    }
+
     if (event.type === "user_intervention") {
       const target = String(event.to || "team_lead");
       if (nodeId === "user" || nodeId === target || nodeId === "mailbox") {
@@ -1259,6 +1515,55 @@ function buildMailboxItems(events: AppEvent[]): MailboxItem[] {
         status: "active",
         timestamp: eventTimestamp(event),
       });
+    }
+    if (event.type === "team_message_posted") {
+      const message = readPath(event, ["message"]) as
+        | { id?: string; from?: string; to?: string; type?: string; content?: string; workItemId?: string }
+        | undefined;
+      const messageType = String(message?.type || "message");
+      if ((messageType === "task_request" || messageType === "artifact_delivery") && message?.workItemId) {
+        return;
+      }
+      itemsByWorkId.set(message?.id || `team-message-${index}`, {
+        id: message?.id || `team-message-${index}`,
+        from: String(message?.from || ""),
+        to: String(message?.to || "mailbox"),
+        kind: messageType,
+        content: String(message?.content || ""),
+        order: fallbackOrder++,
+        status: messageType === "artifact_delivery" || messageType === "approval" || messageType === "answer" ? "done" : "active",
+        timestamp: eventTimestamp(event),
+      });
+    }
+    if (event.type === "human_input_requested") {
+      const request = readPath(event, ["request"]) as HumanInputRequestView | undefined;
+      if (request) {
+        itemsByWorkId.set(request.id, {
+          id: request.id,
+          from: "review_gate",
+          to: "user",
+          kind: "human_input",
+          content: request.question,
+          order: fallbackOrder++,
+          status: "active",
+          timestamp: eventTimestamp(event),
+        });
+      }
+    }
+    if (event.type === "human_input_answered") {
+      const request = readPath(event, ["request"]) as HumanInputRequestView | undefined;
+      if (request) {
+        itemsByWorkId.set(request.id, {
+          id: request.id,
+          from: "user",
+          to: "review_gate",
+          kind: "human_input",
+          content: request.answer || "",
+          order: fallbackOrder++,
+          status: "done",
+          timestamp: eventTimestamp(event),
+        });
+      }
     }
     if (event.type === "final_output") {
       itemsByWorkId.set(`final-${index}`, {
